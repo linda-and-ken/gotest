@@ -19,9 +19,9 @@ on:
 
 # 全局环境变量，整个 workflow 里都能用（用 env.xxx 引用）
 env:
-  # 镜像名（不含用户名）。最终推送的是 <DOCKER_USERNAME>/gotest
+  # 镜像名（不含用户名）。最终推送的是 <DOCKER_USERNAME>/linda_test
   # 想改镜像名就改这里，例如改成 my-hello-app
-  IMAGE_NAME: gotest
+  IMAGE_NAME: gotest 
 
 # 一个 workflow 里可以有多个 job，这里只定义一个
 jobs:
@@ -41,7 +41,20 @@ jobs:
       # Step 2：启用 Buildx，支持多平台构建和更好的缓存（非必须但推荐）
       # -----------------------------------------------------------------------
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3等，算出要打哪些 tag（如 latest、abc1234）
+        uses: docker/setup-buildx-action@v3
+
+      # -----------------------------------------------------------------------
+      # Step 3：用你在 GitHub 里存的密钥登录 Docker Hub，才能 push
+      # DOCKER_USERNAME、DOCKER_PASSWORD 必须在仓库 Settings → Secrets 里配置
+      # -----------------------------------------------------------------------
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # -----------------------------------------------------------------------
+      # Step 4：根据当前分支/提交等，算出要打哪些 tag（如 latest、abc1234）
       # 结果会放到 id: meta 的 outputs 里，后面 step 用 steps.meta.outputs.tags
       # -----------------------------------------------------------------------
       - name: Extract metadata (tags, labels)
@@ -58,7 +71,11 @@ jobs:
 
       # -----------------------------------------------------------------------
       # Step 5：真正执行 docker build，并 push 到 Docker Hub
- 构建上下文：当前仓库根目录（Dockerfile 所在目录）
+      # -----------------------------------------------------------------------
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          # 构建上下文：当前仓库根目录（Dockerfile 所在目录）
           context: .
           # 构建完后直接 push，不只在本地留着
           push: true
