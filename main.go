@@ -10,7 +10,7 @@ import (
 func main() {
 	r := gin.Default()
 	r.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "hello world")
+		c.String(http.StatusOK, "hello world xxxx")
 	})
 
 	addr := ":8080"
