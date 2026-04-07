@@ -1,0 +1,71 @@
+# =============================================================================
+# 本 workflow：用仓库里的 Dockerfile 构建镜像，并推送到 Docker Hub
+#
+# 触发方式：仅手动。仓库 Actions 页 → 选本 workflow → Run workflow
+# （已关闭 push 自动构建，需要发版时再手动点一次即可）
+#
+# 关于 IMAGE_NAME：
+#   不是从 GitHub 后台传进来的，而是直接写在本文件下面的 env 里（见 env.IMAGE_NAME）。
+#   想改成别的镜像名（比如 my-app）就改那一行即可。
+# 必须在 GitHub 后台设置的是：Settings → Secrets → DOCKER_USERNAME、DOCKER_PASSWORD
+# =============================================================================
+
+# 在 Actions 列表里显示的名字
+name: Build and Push to Docker Hub
+
+# 什么时候跑这个 workflow（仅手动，不随 push 自动跑）
+on:
+  workflow_dispatch:
+
+# 全局环境变量，整个 workflow 里都能用（用 env.xxx 引用）
+env:
+  # 镜像名（不含用户名）。最终推送的是 <DOCKER_USERNAME>/gotest
+  # 想改镜像名就改这里，例如改成 my-hello-app
+  IMAGE_NAME: gotest
+
+# 一个 workflow 里可以有多个 job，这里只定义一个
+jobs:
+  # job 的名字，随便起，用来在日志里区分
+  build-and-push:
+    # 跑在 GitHub 提供的 Ubuntu 虚拟机上运行这个job
+    runs-on: ubuntu-latest
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 1：把当前仓库的代码拉到虚拟机里（否则没有 Dockerfile 和源码）
+      # -----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Step 2：启用 Buildx，支持多平台构建和更好的缓存（非必须但推荐）
+      # -----------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3等，算出要打哪些 tag（如 latest、abc1234）
+      # 结果会放到 id: meta 的 outputs 里，后面 step 用 steps.meta.outputs.tags
+      # -----------------------------------------------------------------------
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # 镜像全名：用户名/镜像名，例如 zhumengyh/linda_test
+          images: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # 打一个 latest 标签：仅当「手动触发」或「推的是 main」时为 true
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
+            # 再打一个「短 commit SHA」标签，例如 a1b2c3d，方便对应某次提交
+            type=sha,prefix=,format=short
+
+      # -----------------------------------------------------------------------
+      # Step 5：真正执行 docker build，并 push 到 Docker Hub
+ 构建上下文：当前仓库根目录（Dockerfile 所在目录）
+          context: .
+          # 构建完后直接 push，不只在本地留着
+          push: true
+          # 用上一步算出来的 tags（latest、短 SHA 等）
+          tags: ${{ steps.meta.outputs.tags }}
+          # 镜像上的 labels（可选，便于在 Hub 上看到 commit、branch 等）
+          labels: ${{ steps.meta.outputs.labels }}
+          # 用 GitHub 的 cache 存构建层，下次构建更快
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
