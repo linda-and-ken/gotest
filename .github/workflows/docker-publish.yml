@@ -24,7 +24,7 @@ env:
   REGISTRY: registry.9kfun.xyz
   # registry 主机后面的路径：一般为「项目/仓库名」或「命名空间/仓库名」，须与控制台里一致
   # 只有一层时也可写成 gotest（视你方 registry 是否允许单段名）
-  IMAGE_REPOSITORY: gotest
+  IMAGE_REPOSITORY: xxx
 
 jobs:
   build-and-push:
@@ -62,3 +62,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
