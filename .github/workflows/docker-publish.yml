@@ -63,7 +63,7 @@ jobs:
       - name: Ensure deploy files exist
         run: |
           set -euo pipefail
-          test -f assets/compose.template.yaml
+          test -f compose.template.yaml
           test -f .env.prod
 
       - name: Render compose from template
