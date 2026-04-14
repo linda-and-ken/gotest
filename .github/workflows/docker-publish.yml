@@ -40,7 +40,7 @@ jobs:
           COMMIT_ID="${GITHUB_SHA::7}"
           IMAGE_SHA_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${COMMIT_ID}"
           IMAGE_LATEST_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest"
-          REMOTE_APP_DIR="${{ env.REMOTE_BASE_DIR }}/${{ env.APP_NAME }}"
+          REMOTE_APP_DIR="${{ env.REMOTE_BASE_DIR }}"
           REMOTE_DEPLOY_DIR="${REMOTE_APP_DIR}/${{ env.APP_NAME }}"
           REMOTE_COMPOSE_FILE="${REMOTE_DEPLOY_DIR}/compose-${COMMIT_ID}.yaml"
 
