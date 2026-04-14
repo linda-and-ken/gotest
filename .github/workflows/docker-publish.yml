@@ -72,7 +72,7 @@ jobs:
           sed \
             -e "s|__APP_NAME__|${{ env.APP_NAME }}|g" \
             -e "s|__IMAGE__|${{ steps.vars.outputs.image_sha_tag }}|g" \
-            assets/compose.template.yaml > compose.rendered.yaml
+            compose.template.yaml > compose.rendered.yaml
 
       - name: Prepare SSH key
         run: |
