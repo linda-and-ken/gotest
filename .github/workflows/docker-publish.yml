@@ -86,6 +86,8 @@ jobs:
 
       - name: Upload compose and env to remote host
         run: |
+          echo ${{ secrets.DEPLOY_USER }}
+          echo ${{ secrets.DEPLOY_HOST }}
           set -euo pipefail
           REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
           ssh "${REMOTE}" "mkdir -p '${{ steps.vars.outputs.remote_app_dir }}'"
