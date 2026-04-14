@@ -91,6 +91,7 @@ jobs:
           set -euo pipefail
           REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
           ssh "${REMOTE}" "sudo mkdir -p '${{ steps.vars.outputs.remote_deploy_dir }}'"
+          ssh "${REMOTE}" "sudo chown ubuntu:ubuntu '${{ steps.vars.outputs.remote_deploy_dir }}'"
           scp compose.rendered.yaml "${REMOTE}:${{ steps.vars.outputs.remote_compose_file }}"
           scp .env.prod "${REMOTE}:${{ steps.vars.outputs.remote_deploy_dir }}/.env.prod"
 
