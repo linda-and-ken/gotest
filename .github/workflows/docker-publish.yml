@@ -1,35 +1,24 @@
-# =============================================================================
-# 本 workflow：用仓库里的 Dockerfile 构建镜像，并推送到指定容器仓库（默认：自有 registry）
-#
-# 触发：Actions → 本 workflow → Run workflow
-#
-# GitHub 仓库需配置 Secrets（Settings → Secrets and variables → Actions）：
-#   REGISTRY_USERNAME  你在 registry.9kfun.xyz 上的用户名（或 robot 账号名）
-#   REGISTRY_PASSWORD  密码或访问令牌（勿用明文密码提交到仓库）
-#
-# 镜像完整名：REGISTRY/IMAGE_REPOSITORY（见下方 env），例如：
-#   registry.9kfun.xyz/myproject/gotest:latest
-#
-# 若仍要推 Docker Hub：把 REGISTRY 改为 docker.io，IMAGE_REPOSITORY 改为
-#   <你的 Hub 用户名>/gotest，并用 Hub 的账号密码填 REGISTRY_* 即可。
-# =============================================================================
-
-name: Build and Push Container Image
+name: Docker Publish And Deploy
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
-  # 不要带 https://；Docker 客户端会走 HTTPS
+  # Registry host without protocol (for example: registry.9kfun.xyz)
   REGISTRY: registry.9kfun.xyz
-  # registry 主机后面的路径：一般为「项目/仓库名」或「命名空间/仓库名」，须与控制台里一致
-  # 只有一层时也可写成 gotest（视你方 registry 是否允许单段名）
-  IMAGE_REPOSITORY: xxx
+  # Full repository path in registry (for example: myproject/walle)
+  IMAGE_REPOSITORY: walle_app
+  # Logical app name used in compose service and remote path
+  APP_NAME: walle_app
+  # Remote deploy root
+  REMOTE_BASE_DIR: /opt/stacks/walle_app
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,22 +33,73 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
-            type=sha,prefix=,format=short
+      - name: Prepare image metadata
+        id: vars
+        run: |
+          set -euo pipefail
+          COMMIT_ID="${GITHUB_SHA::7}"
+          IMAGE_SHA_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${COMMIT_ID}"
+          IMAGE_LATEST_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest"
+          REMOTE_APP_DIR="${{ env.REMOTE_BASE_DIR }}/${{ env.APP_NAME }}"
+          REMOTE_COMPOSE_FILE="${REMOTE_APP_DIR}/compose-${COMMIT_ID}.yaml"
+
+          echo "commit_id=${COMMIT_ID}" >> "${GITHUB_OUTPUT}"
+          echo "image_sha_tag=${IMAGE_SHA_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "image_latest_tag=${IMAGE_LATEST_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "remote_app_dir=${REMOTE_APP_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "remote_compose_file=${REMOTE_COMPOSE_FILE}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ steps.vars.outputs.image_sha_tag }}
+            ${{ steps.vars.outputs.image_latest_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Ensure deploy files exist
+        run: |
+          set -euo pipefail
+          test -f assets/compose.template.yaml
+          test -f .env.prod
+
+      - name: Render compose from template
+        run: |
+          set -euo pipefail
+          sed \
+            -e "s|__APP_NAME__|${{ env.APP_NAME }}|g" \
+            -e "s|__IMAGE__|${{ steps.vars.outputs.image_sha_tag }}|g" \
+            assets/compose.template.yaml > compose.rendered.yaml
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > "${HOME}/.ssh/id_ed25519"
+          chmod 600 "${HOME}/.ssh/id_ed25519"
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> "${HOME}/.ssh/known_hosts"
+          chmod 644 "${HOME}/.ssh/known_hosts"
+
+      - name: Upload compose and env to remote host
+        run: |
+          set -euo pipefail
+          REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          ssh "${REMOTE}" "mkdir -p '${{ steps.vars.outputs.remote_app_dir }}'"
+          scp compose.rendered.yaml "${REMOTE}:${{ steps.vars.outputs.remote_compose_file }}"
+          scp .env.prod "${REMOTE}:${{ steps.vars.outputs.remote_app_dir }}/.env.prod"
+
+      - name: Run docker compose on remote host
+        run: |
+          set -euo pipefail
+          REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          ssh "${REMOTE}" "
+            set -euo pipefail
+            docker login '${{ env.REGISTRY }}' -u '${{ secrets.REGISTRY_USERNAME }}' -p '${{ secrets.REGISTRY_PASSWORD }}'
+            cd '${{ steps.vars.outputs.remote_app_dir }}'
+            docker compose -f 'compose-${{ steps.vars.outputs.commit_id }}.yaml' --env-file '.env.prod' pull
+            docker compose -f 'compose-${{ steps.vars.outputs.commit_id }}.yaml' --env-file '.env.prod' up -d --remove-orphans
+          "
