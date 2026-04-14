@@ -1,0 +1,16 @@
+name: __APP_NAME__
+
+services:
+  __APP_NAME__:
+    image: __IMAGE__
+    container_name: __APP_NAME__
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    environment:
+      APP_NAME: __APP_NAME__
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./.env.prod:/app/.env.prod:ro
