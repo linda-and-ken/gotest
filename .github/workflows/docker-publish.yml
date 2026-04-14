@@ -103,7 +103,7 @@ jobs:
           ssh "${REMOTE}" "
             set -eu
             docker login '${{ env.REGISTRY }}' -u '${{ secrets.REGISTRY_USERNAME }}' -p '${{ secrets.REGISTRY_PASSWORD }}'
-            sudo cd '${{ steps.vars.outputs.remote_deploy_dir }}'
+            cd '${{ steps.vars.outputs.remote_deploy_dir }}'
             docker compose -f 'compose-${{ steps.vars.outputs.commit_id }}.yaml' --env-file '.env.prod' pull
             docker compose -f 'compose-${{ steps.vars.outputs.commit_id }}.yaml' --env-file '.env.prod' up -d --remove-orphans
           "
