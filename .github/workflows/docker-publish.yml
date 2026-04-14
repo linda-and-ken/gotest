@@ -41,12 +41,14 @@ jobs:
           IMAGE_SHA_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${COMMIT_ID}"
           IMAGE_LATEST_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest"
           REMOTE_APP_DIR="${{ env.REMOTE_BASE_DIR }}/${{ env.APP_NAME }}"
-          REMOTE_COMPOSE_FILE="${REMOTE_APP_DIR}/compose-${COMMIT_ID}.yaml"
+          REMOTE_DEPLOY_DIR="${REMOTE_APP_DIR}/${{ env.APP_NAME }}"
+          REMOTE_COMPOSE_FILE="${REMOTE_DEPLOY_DIR}/compose-${COMMIT_ID}.yaml"
 
           echo "commit_id=${COMMIT_ID}" >> "${GITHUB_OUTPUT}"
           echo "image_sha_tag=${IMAGE_SHA_TAG}" >> "${GITHUB_OUTPUT}"
           echo "image_latest_tag=${IMAGE_LATEST_TAG}" >> "${GITHUB_OUTPUT}"
           echo "remote_app_dir=${REMOTE_APP_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "remote_deploy_dir=${REMOTE_DEPLOY_DIR}" >> "${GITHUB_OUTPUT}"
           echo "remote_compose_file=${REMOTE_COMPOSE_FILE}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push
@@ -86,13 +88,11 @@ jobs:
 
       - name: Upload compose and env to remote host
         run: |
-          echo ${{ secrets.DEPLOY_USER }}
-          echo ${{ secrets.DEPLOY_HOST }}
           set -euo pipefail
           REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
-          ssh "${REMOTE}" "mkdir -p '${{ steps.vars.outputs.remote_app_dir }}'"
+          ssh "${REMOTE}" "sudo mkdir -p '${{ steps.vars.outputs.remote_deploy_dir }}'"
           scp compose.rendered.yaml "${REMOTE}:${{ steps.vars.outputs.remote_compose_file }}"
-          scp .env.prod "${REMOTE}:${{ steps.vars.outputs.remote_app_dir }}/.env.prod"
+          scp .env.prod "${REMOTE}:${{ steps.vars.outputs.remote_deploy_dir }}/.env.prod"
 
       - name: Run docker compose on remote host
         run: |
@@ -101,7 +101,7 @@ jobs:
           ssh "${REMOTE}" "
             set -euo pipefail
             docker login '${{ env.REGISTRY }}' -u '${{ secrets.REGISTRY_USERNAME }}' -p '${{ secrets.REGISTRY_PASSWORD }}'
-            cd '${{ steps.vars.outputs.remote_app_dir }}'
+            cd '${{ steps.vars.outputs.remote_deploy_dir }}'
             docker compose -f 'compose-${{ steps.vars.outputs.commit_id }}.yaml' --env-file '.env.prod' pull
             docker compose -f 'compose-${{ steps.vars.outputs.commit_id }}.yaml' --env-file '.env.prod' up -d --remove-orphans
           "
