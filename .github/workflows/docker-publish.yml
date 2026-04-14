@@ -88,12 +88,13 @@ jobs:
 
       - name: Upload compose and env to remote host
         run: |
-          set -euo pipefail
+          set -eEuo pipefail
+          trap 'echo "Upload step failed, exiting." >&2' ERR
           REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
-          ssh "${REMOTE}" "sudo mkdir -p '${{ steps.vars.outputs.remote_deploy_dir }}'"
-          ssh "${REMOTE}" "sudo chown ubuntu:ubuntu '${{ steps.vars.outputs.remote_deploy_dir }}'"
-          scp compose.rendered.yaml "${REMOTE}:${{ steps.vars.outputs.remote_compose_file }}"
-          scp .env.prod "${REMOTE}:${{ steps.vars.outputs.remote_deploy_dir }}/.env.prod"
+          ssh "${REMOTE}" "if [ ! -d '${{ steps.vars.outputs.remote_deploy_dir }}' ]; then sudo mkdir -p '${{ steps.vars.outputs.remote_deploy_dir }}' && sudo chown ubuntu:ubuntu '${{ steps.vars.outputs.remote_deploy_dir }}'; fi" && \
+          scp compose.rendered.yaml "${REMOTE}:${{ steps.vars.outputs.remote_compose_file }}" && \
+          scp .env.prod "${REMOTE}:${{ steps.vars.outputs.remote_deploy_dir }}/.env.prod" && \
+          ssh "${REMOTE}" "test -f '${{ steps.vars.outputs.remote_compose_file }}' && test -f '${{ steps.vars.outputs.remote_deploy_dir }}/.env.prod'"
 
       - name: Run docker compose on remote host
         run: |
