@@ -54,7 +54,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Setup Nomad CLI
-        uses: hashicorp/setup-nomad@v3
+        uses: hashicorp/setup-nomad@main
         with:
           version: "1.11.2"
 
